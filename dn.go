@@ -28,7 +28,7 @@ func (dn *DiscoveryNode) listen() {
 	if l, err := net.Listen(dn.config.Type, dn.config.Host+":"+dn.config.Port); err == nil {
 		defer l.Close()
 
-		fmt.Println("Node " + dn.config.Name + " is listening on " + dn.config.Type + " endpoint: " + dn.config.Host + ":" + dn.config.Port)
+		fmt.Println("Listening on " + dn.config.Type + " endpoint: " + dn.config.Host + ":" + dn.config.Port)
 
 		for {
 			if conn, err := l.Accept(); err == nil {
@@ -43,14 +43,10 @@ func (dn *DiscoveryNode) listen() {
 
 func (dn *DiscoveryNode) handleRequest(conn net.Conn) {
 	data, _, _ := bufio.NewReader(conn).ReadLine()
-	dn.GetNodes(conn)
 
 	cmd, body := extractRequest(data)
 
-	fmt.Println("Cmd:", string(cmd))
-	fmt.Println("Body:", string(body))
-
-	fmt.Println("Node connected: " + string(body))
+	fmt.Println("REQUEST:", string(data))
 
 	switch string(cmd) {
 		
@@ -58,17 +54,24 @@ func (dn *DiscoveryNode) handleRequest(conn net.Conn) {
 
 		//register node by adding it to leveldb
 		register(conn, body)
+		dn.GetNodes(conn)
+		break
 
 	case string(common.Command.Get):
 
 		//get the content based on content-address hash
 		get(conn, body)
+		break
 
 	case string(common.Command.Add):
 
 		//add the content description and hash to leveldb
 		add(conn, body)
+		break
 	}
+
+	
+
 }
 
 func  register(conn net.Conn, data []byte){
@@ -87,16 +90,16 @@ func  register(conn net.Conn, data []byte){
 
 				//log newly added node
 				if data, err := db.Get([]byte(node.Host+":"+node.Port), nil); err == nil {
-					fmt.Println("Registered node: " + string(data))
+					fmt.Println("REGISTERED: " + string(data))
 				} else {
-					fmt.Println("Get:" + err.Error())
+					fmt.Println("Error:" + err.Error())
 
 				}
 			} else {
-				fmt.Println("Get:" + err.Error())
+				fmt.Println("Error:" + err.Error())
 			}
 		} else {
-			fmt.Println("OpenFile:" + err.Error())
+			fmt.Println("Error:" + err.Error())
 		}
 	} else {
 		fmt.Println(err)
@@ -131,18 +134,17 @@ func add(conn net.Conn, data []byte){
 
 func get(conn net.Conn, hash []byte){
 	if db, err := common.NewDb(util.LoadConfigByKey("DB_CONTENTS")); err == nil {
-		iterator := db.NewIterator(nil, nil)
 		
-		data, err := db.Get(hash, nil)
+		data, _ := db.Get(hash, nil)
 		var desc common.Desc
 
 		if err := json.Unmarshal(data, &desc); err == nil {
-			fmt.Println("Data: ", string(data))
 
 			//TODO: return a formatted data
+			fmt.Println("RESPONDED:", string(data))
 			conn.Write(append(data, '\n'))
 		} else {
-			fmt.Println("Get:" + err.Error())
+			fmt.Println("Error:" + err.Error())
 		}
 		
 		db.Close()
